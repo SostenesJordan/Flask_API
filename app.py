@@ -3,7 +3,7 @@ from urllib import response
 from flask import Flask, jsonify, request, Response, json, render_template, session, redirect, url_for, make_response
 from flask_pymongo import PyMongo
 from flask_login import LoginManager
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
 from bson.objectid import ObjectId
 import uuid
@@ -12,6 +12,11 @@ import jwt
 import re
 from datetime import datetime, timedelta
 from functools import wraps
+import wrapt
+
+import mechanize
+from http import cookiejar
+import time
 
 
 app = Flask(__name__)
@@ -19,16 +24,92 @@ app = Flask(__name__)
 app.config['MONGO_URI'] = 'mongodb://localhost:27017/Users'
 app.config['SECRET_KEY'] = 'mysecret'
 mongo = PyMongo(app)
-
 # JWT Config
-app.config["JWT_SECRET_KEY"] = "this-is-secret-key"
+
+app.config['JWT_SECRET_KEY'] = 'this-is-secret-key'
 jwt = JWTManager(app)
 
 
-@app.route("/dashboard")
-@jwt_required
-def dasboard():
-    return jsonify(message="Welcome! to the Data Science Learner")
+@app.route("/dashboard" , methods=["GET"])
+@jwt_required()
+def perfil():
+
+    data = request.form
+
+    Placa_form, Renavam_form = data.get('placa'), data.get(
+            'renavam')
+
+    navegador = mechanize.Browser()
+
+    url = "https://www2.detran.rn.gov.br/externo/consultarveiculo.asp"
+
+    placa = Placa_form
+    renavam = Renavam_form
+
+    cj = cookiejar.LWPCookieJar()
+    navegador.set_cookiejar(cj)
+
+    navegador.set_handle_equiv(True)
+    navegador.set_handle_gzip(False)
+    navegador.set_handle_redirect(True)
+    navegador.set_handle_referer(True)
+    navegador.set_handle_robots(False)
+    navegador.set_handle_refresh(
+        mechanize._http.HTTPRefreshProcessor(), max_time=1)
+
+    navegador.addheaders = [('User-agent', 'Mozilla/5.0 (X11;\
+    U; Linux i686; en-US; rv:1.9.0.1) Gecko/2008071615\
+    Fedora/3.0.1-1.fc9 Firefox/3.0.1')]
+
+    navegador.open(url)
+    navegador.select_form(nr=0)
+
+    # for f in navegador.forms():
+    #     print(f)
+
+    navegador.form['placa'] = placa
+    navegador.form['renavam'] = renavam
+
+    navegador.submit()
+    html = navegador.response().read()
+    time.sleep(1)
+
+    html_decode = html.decode("iso-8859-1")
+
+    rgx_modelo = re.search(
+        'Marca/Modelo<BR><.*?>(.*?)</SPAN>', html_decode, re.IGNORECASE)
+    modelo_veiculo = rgx_modelo.group(1)
+
+    rgx_ano_de_fabricação = re.search(
+        'Fabricação/Modelo<BR><.*?>(.*?)</SPAN>', html_decode, re.IGNORECASE)
+    ano_de_fabricação = rgx_ano_de_fabricação.group(1)
+
+    rgx_informacoes_pendentes = re.search(
+        'Informações PENDENTES originadas das financeiras via SNG - Sistema Nacional de Gravame<BR><SPAN.*?>(.*?)</SPAN></TD>', html_decode, re.IGNORECASE)
+    informacoes_pendentes = rgx_informacoes_pendentes.group(1)
+
+    rgx_impedimentos = re.search(
+        'Impedimentos<BR><SPAN.*?>(.*?)</SPAN></TD>', html_decode, re.IGNORECASE)
+    impedimentos = rgx_impedimentos.group(1)
+
+    return jsonify({
+        "modelo": modelo_veiculo,
+        "ano de fabricação": ano_de_fabricação,
+        "informações pendentes": informacoes_pendentes,
+        "impedimentos": impedimentos
+    })
+    
+    # usuario = get_jwt_identity()
+
+    # user = mongo.db.users.find_one({'nome' : usuario})
+
+    # if user:
+    #     del user["_id"], user["senha"]
+    #     return  jsonify({'perfil':user}), 200
+
+    # else:
+    #     jsonify({"mensagem" : "não encontrado"}), 404
+
 
 
 @app.route('/login', methods=['POST'])
