@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 import wrapt
 
+import requests
 import mechanize
 from http import cookiejar
 import time
@@ -33,70 +34,62 @@ jwt = JWTManager(app)
 @app.route("/dashboard" , methods=["GET"])
 @jwt_required()
 def perfil():
-
+    url = 'https://www2.detran.rn.gov.br/servicos/consultaveiculo.asp'
     data = request.form
-
     Placa_form, Renavam_form = data.get('placa'), data.get(
             'renavam')
-
-    navegador = mechanize.Browser()
-
-    url = "https://www2.detran.rn.gov.br/externo/consultarveiculo.asp"
 
     placa = Placa_form
     renavam = Renavam_form
 
-    cj = cookiejar.LWPCookieJar()
-    navegador.set_cookiejar(cj)
+    headers = {'User-Agent': 'Mozilla/5.0','content-type': 'application/x-www-form-urlencoded'}
 
-    navegador.set_handle_equiv(True)
-    navegador.set_handle_gzip(False)
-    navegador.set_handle_redirect(True)
-    navegador.set_handle_referer(True)
-    navegador.set_handle_robots(False)
-    navegador.set_handle_refresh(
-        mechanize._http.HTTPRefreshProcessor(), max_time=1)
+    payload = {'placa':placa,'renavam':renavam,'btnConsultaPlaca':''}
 
-    navegador.addheaders = [('User-agent', 'Mozilla/5.0 (X11;\
-    U; Linux i686; en-US; rv:1.9.0.1) Gecko/2008071615\
-    Fedora/3.0.1-1.fc9 Firefox/3.0.1')]
-
-    navegador.open(url)
-    navegador.select_form(nr=0)
-
-    # for f in navegador.forms():
-    #     print(f)
-
-    navegador.form['placa'] = placa
-    navegador.form['renavam'] = renavam
-
-    navegador.submit()
-    html = navegador.response().read()
-    time.sleep(1)
-
-    html_decode = html.decode("iso-8859-1")
+    r = requests.post(url, data=payload, headers=headers)
+    # print(r.text)
 
     rgx_modelo = re.search(
-        'Marca/Modelo<BR><.*?>(.*?)</SPAN>', html_decode, re.IGNORECASE)
+        'Marca/Modelo<BR><.*?>(.*?)</SPAN>', r.text, re.IGNORECASE)
     modelo_veiculo = rgx_modelo.group(1)
 
     rgx_ano_de_fabricação = re.search(
-        'Fabricação/Modelo<BR><.*?>(.*?)</SPAN>', html_decode, re.IGNORECASE)
+        'Fabricação/Modelo<BR><.*?>(.*?)</SPAN>', r.text, re.IGNORECASE)
     ano_de_fabricação = rgx_ano_de_fabricação.group(1)
 
     rgx_informacoes_pendentes = re.search(
-        'Informações PENDENTES originadas das financeiras via SNG - Sistema Nacional de Gravame<BR><SPAN.*?>(.*?)</SPAN></TD>', html_decode, re.IGNORECASE)
-    informacoes_pendentes = rgx_informacoes_pendentes.group(1)
+        'Informações PENDENTES originadas das financeiras via SNG - Sistema Nacional de Gravame<BR><SPAN.*?>(.*?)</SPAN></TD>', r.text, re.IGNORECASE)
+    informacoesPendentes = rgx_informacoes_pendentes.group(1)
 
     rgx_impedimentos = re.search(
-        'Impedimentos<BR><SPAN.*?>(.*?)</SPAN></TD>', html_decode, re.IGNORECASE)
+        'Impedimentos<BR><SPAN.*?>(.*?)</SPAN></TD>', r.text, re.IGNORECASE)
     impedimentos = rgx_impedimentos.group(1)
 
+    try:
+        rgx_debitos_total = re.search('Total dos Débitos</B></TD>\s*<TD.*?><B>(.*?)</B>', r.text, re.IGNORECASE)
+        debitos_total = rgx_debitos_total.group(1)
+    except:
+        debitos_total = False
+
+    rgx_multas = re.search('Multas<BR><SPAN.*?>(.*?)</SPAN></TD>', r.text, re.IGNORECASE)
+    multas_valor = rgx_multas.group(1)
+
+    if not multas_valor:
+        multas_valor = False
+
+    if multas_valor.startswith('0'):
+        tem_multa = False 
+    else:
+        tem_multa = multas_valor
+
+    
     return jsonify({
         "modelo": modelo_veiculo,
         "ano de fabricação": ano_de_fabricação,
-        "informações pendentes": informacoes_pendentes,
-        "impedimentos": impedimentos
+        "informações pendentes": informacoesPendentes,
+        "impedimentos": impedimentos,
+        "Multas": tem_multa,
+        "Total de debitos (Licenciamento/impostos)": debitos_total,
     })
     
     # usuario = get_jwt_identity()
