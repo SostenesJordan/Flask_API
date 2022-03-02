@@ -34,6 +34,10 @@ jwt = JWTManager(app)
 @app.route("/dashboard" , methods=["GET"])
 @jwt_required()
 def perfil():
+
+    atualizarDb = mongo.db.veiculo
+    users = mongo.db.users
+
     url = 'https://www2.detran.rn.gov.br/servicos/consultaveiculo.asp'
     data = request.form
     Placa_form, Renavam_form = data.get('placa'), data.get(
@@ -41,6 +45,15 @@ def perfil():
 
     placa = Placa_form
     renavam = Renavam_form
+
+    if atualizarDb.find_one({'renavam': data['renavam']}):
+        return jsonify({
+            atualizarDb({
+
+                "retirado do banco": True,
+          
+            })
+        })
 
     headers = {'User-Agent': 'Mozilla/5.0','content-type': 'application/x-www-form-urlencoded'}
 
@@ -81,6 +94,11 @@ def perfil():
         tem_multa = False 
     else:
         tem_multa = multas_valor
+
+
+    atualizarDb.insert_one({'_id': str(uuid.uuid4()), 'modelo': modelo_veiculo,
+                        'fabricação': ano_de_fabricação, 'infomações pendentes': informacoesPendentes,
+                        'total de devitos': debitos_total, 'renavam': renavam, 'placa': placa})
 
     
     return jsonify({
