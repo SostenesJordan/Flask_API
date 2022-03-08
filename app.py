@@ -1,3 +1,4 @@
+from asyncio.windows_events import NULL
 import hashlib
 from urllib import response
 from flask import Flask, jsonify, request, Response, json, render_template, session, redirect, url_for, make_response
@@ -47,13 +48,7 @@ def perfil():
     renavam = Renavam_form
 
     if atualizarDb.find_one({'renavam': data['renavam']}):
-        return jsonify({
-            atualizarDb({
-
-                "retirado do banco": True,
-          
-            })
-        })
+        return jsonify({ "retirado do banco": True})
 
     headers = {'User-Agent': 'Mozilla/5.0','content-type': 'application/x-www-form-urlencoded'}
 
@@ -61,6 +56,9 @@ def perfil():
 
     r = requests.post(url, data=payload, headers=headers)
     # print(r.text)
+
+    if r.text.find("O veÃ­culo informado nÃ£o Ã© cadastrado no DETRAN/RN ou as informaÃ§Ãµes de Placa e Renavam nÃ£o identificam o veÃ­culo corretamente."):
+      return jsonify({"Erro": "veiculo não encontrado"})
 
     rgx_modelo = re.search(
         'Marca/Modelo<BR><.*?>(.*?)</SPAN>', r.text, re.IGNORECASE)
@@ -89,7 +87,7 @@ def perfil():
 
     if not multas_valor:
         multas_valor = False
-
+ 
     if multas_valor.startswith('0'):
         tem_multa = False 
     else:
@@ -246,7 +244,123 @@ def register():
     # return render_template('register.html')
 
 # Utils
-
+@app.route('/ej_result', methods=['GET'])
+def ej_result():
+    return jsonify(
+        {
+          "status": "sucesso",
+          "codigo_requisicao": "ej1",
+          "processo": {
+            "andamentos": [
+              {
+                "corpo": "Juntada a petição de Manifestação (Reclamante.)",
+                "data": "2020-05-15T12:33:27.52",
+                "descricao": None,
+                "documento": False
+              },
+              {
+                "corpo": "Arquivados os autos definitivamente",
+                "data": "2019-07-23T13:14:44.321",
+                "descricao": None,
+                "documento": False
+              },
+              {
+                "corpo": "Expedido(a) Ofício a(o) destinatário",
+                "data": "2019-07-10T15:22:10.236",
+                "descricao": None,
+                "documento": False
+              }
+            ],
+            "ano": "2016",
+            "area": None,
+            "assunto": "Rescisão Indireta",
+            "classe": "ATOrd",
+            "colegiado": None,
+            "comarca": None,
+            "data_distribuicao": "2016-09-30T15:55:24.493",
+            "estado": "sc",
+            "expedientes": [
+              {
+                "data_ciencia": "2019-08-09T00:00:00",
+                "data_criacao": "2019-07-10T00:00:00",
+                "destinatario": "M. L.",
+                "fechado": True,
+                "meio": "Correios",
+                "tipo": "Ofício"
+              },
+              {
+                "data_ciencia": "2019-08-09T00:00:00",
+                "data_criacao": "2019-07-10T00:00:00",
+                "destinatario": "M. R. S. F.",
+                "fechado": True,
+                "meio": "Correios",
+                "tipo": "Ofício"
+              },
+              {
+                "data_ciencia": "2019-07-02T00:00:00",
+                "data_criacao": "2019-06-28T00:00:00",
+                "destinatario": "M. L.",
+                "fechado": True,
+                "meio": "Diário Eletrônico",
+                "tipo": "Notificação"
+              }
+            ],
+            "foro": None,
+            "instancia": "1",
+            "juiz": None,
+            "natureza": None,
+            "numero": "1016130-22.2018.8.26.0100",
+            "numero_antigo": None,
+            "orgao": None,
+            "orgao_julgador": NULL,
+            "outros_assuntos": [
+              "Indenização por Dano Moral"
+            ],
+            "partes": [
+              {
+                "advogados": [
+                  {
+                    "categoria": "ADVOGADO",
+                    "cpf_cnpj": "023.130.459-51",
+                    "nome": "FABIO LOPES DE LIMA",
+                    "oab": "RN20555"
+                  }
+                ],
+                "categoria": "RECLAMANTE",
+                "cpf_cnpj": "700.588.123-88",
+                "nome": "MARCIA REGINA SOUZA DE FREITAS ",
+                "polo": "ATIVO"
+              },
+              {
+                "advogados": [
+                  {
+                    "categoria": "ADVOGADO",
+                    "cpf_cnpj": "772.243.969-15",
+                    "nome": "SAMUEL CARLOS LIMA",
+                    "oab": "PB2020"
+                  },
+                  {
+                    "categoria": "ADVOGADO",
+                    "cpf_cnpj": "175.381.638-67",
+                    "nome": "LUIZ ALEXANDRE LIPORONI MARTINS",
+                    "oab": None
+                  }
+                ],
+                "categoria": "RECLAMADO",
+                "cpf_cnpj": None,
+                "nome": "MAGAZINE LUIZA ",
+                "polo": "PASSIVO"
+              }
+            ],
+            "relator": None,
+            "setor_justica": "trabalhista",
+            "sistema": "PJE",
+            "tribunal": "trt12",
+            "valor": "75000.0",
+            "vara": "1ª VARA DO TRABALHO DE FLORIANÓPOLIS"
+          }
+        }
+    )
 
 def email_valido(email):
     if(re.search(r'^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+\.[a-zA-Z\.a-zA-Z]{1,3}$', email)):
